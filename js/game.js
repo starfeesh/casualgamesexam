@@ -23,7 +23,7 @@ class Player extends Phaser.Sprite {
     move() {
         if (this.isFrozen) { return; }
 
-        let speed = 5;
+        var speed = 200;
         this.body.velocity.x = speed;
     }
     jump() {
@@ -43,13 +43,12 @@ class RouteManager extends Phaser.Group {
         this.player = player;
         var spawnDistanceAheadOfPlayer = 832;
         var activationDistanceAheadOfPlayer = 624;
-        var spawnedChunks = [];
+        this.spawnedChunks = [];
 
         this.jsonChunks = {0: null, 1: "slide.png", 2: "pickup.png", 3: "jump.png"};
         this.upKey = game.input.keyboard.addKey(Phaser.Keyboard.UP);
     }
     update() {
-        console.log(this.player.x);
 
         if (this.upKey.isDown){
             this.initChunks();
@@ -61,6 +60,7 @@ class RouteManager extends Phaser.Group {
         chunk.addTilesetImage('Chunks','level');
 
         chunk.createLayer('Layer1');
+        this.spawnedChunks.push(chunk);
     }
 }
 class RouteChunk extends Phaser.Group {
@@ -79,28 +79,29 @@ class GameState {
         game.load.image('midground', 'assets/img/level01/mid.png');
         game.load.image('midforeground', 'assets/img/level01/midfore.png');
         game.load.image('grass', 'assets/img/level01/grass.png');
-        game.load.image('moon', 'assets/img/level01/moon.png');
         game.load.image('level', 'assets/img/tiles.png');
+        game.load.image('moon', 'assets/img/level01/moon.png');
 
         game.load.tilemap('data', 'assets/json/chunks.json', null, Phaser.Tilemap.TILED_JSON);
     }
     create () {
         game.physics.startSystem(Phaser.Physics.ARCADE);
-
-        this.game.world.worldWidth = 1664;
+        this.game.renderer.renderSession.roundPixels = true;
+        this.game.world.worldWidth = 2496;
         this.loadLevel(this.game.world.worldWidth);
 
         game.world.setBounds(0, 0, this.game.world.worldWidth, 480);
+        game.stage.disableVisibilityChange = true;
 
     }
     loadLevel () {
+        this.moon = this.game.add.image(0,0,'moon');
+        this.moon.fixedToCamera = true;
         this.background = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'background');
-        this.moon = this.game.add.image(0, 0, 'moon');
         this.midground = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'midground');
         this.midforeground = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'midforeground');
 
         this.spawnPlayer();
-        game.camera.bounds.setTo(0,0,2080, 480);
         game.camera.follow(this.player);
         this.grass = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'grass');
 
