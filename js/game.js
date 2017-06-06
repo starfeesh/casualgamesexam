@@ -1,8 +1,11 @@
+class TrackObject {
+    constructor(game, x, y, data, sprite) {
+
+    }
+}
 class Player extends Phaser.Sprite {
     constructor(game, x, y) {
         super(game, x, y, 'player');
-
-        this.playerPosition = this.x;
 
         this.anchor.set(0.5, 1);
         this.animations.add('idle', Phaser.Animation.generateFrameNames('idle_', 0, 11, '', 3), 16, true);
@@ -13,14 +16,15 @@ class Player extends Phaser.Sprite {
         this.animations.play('run');
 
         this.y = this.game.canvas.height;
-        this.game.physics.enable(this);
+        this.game.physics.arcade.enableBody(this);
         this.body.collideWorldBounds = true;
+
     }
     move() {
         if (this.isFrozen) { return; }
-        
+
         let speed = 5;
-        this.body.velocity.x += speed;
+        this.body.velocity.x = speed;
     }
     jump() {
         var jumpSpeed = 600;
@@ -34,42 +38,70 @@ class Player extends Phaser.Sprite {
     }
 }
 class RouteManager extends Phaser.Group {
-    constructor(game, player) {
+    constructor(game, player, data) {
         super(game);
         this.player = player;
         var spawnDistanceAheadOfPlayer = 832;
         var activationDistanceAheadOfPlayer = 624;
         var spawnedChunks = [];
+
+        this.jsonChunks = {0: null, 1: "slide.png", 2: "pickup.png", 3: "jump.png"};
+        this.upKey = game.input.keyboard.addKey(Phaser.Keyboard.UP);
     }
     update() {
         console.log(this.player.x);
-    }
 
+        if (this.upKey.isDown){
+            this.initChunks();
+        }
+    }
+    initChunks() {
+
+        var chunk = game.add.tilemap('data');
+        chunk.addTilesetImage('Chunks','level');
+
+        chunk.createLayer('Layer1');
+    }
+}
+class RouteChunk extends Phaser.Group {
+    constructor(game, x) {
+        super(game);
+
+
+
+    }
 }
 // Game
 class GameState {
     preload () {
-        this.game.load.atlasJSONHash('player', 'assets/img/player.png', 'assets/json/player.json'); // Load image with atlasJSONHash (from TexturePacker)
-        this.game.load.image('background', 'assets/img/level01/back.png');
-        this.game.load.image('midground', 'assets/img/level01/mid.png');
-        this.game.load.image('midforeground', 'assets/img/level01/midfore.png');
-        this.game.load.image('grass', 'assets/img/level01/grass.png');
-        this.game.load.image('moon', 'assets/img/level01/moon.png');
+        game.load.atlasJSONHash('player', 'assets/img/player.png', 'assets/json/player.json'); // Load image with atlasJSONHash (from TexturePacker)
+        game.load.image('background', 'assets/img/level01/back.png');
+        game.load.image('midground', 'assets/img/level01/mid.png');
+        game.load.image('midforeground', 'assets/img/level01/midfore.png');
+        game.load.image('grass', 'assets/img/level01/grass.png');
+        game.load.image('moon', 'assets/img/level01/moon.png');
+        game.load.image('level', 'assets/img/tiles.png');
+
+        game.load.tilemap('data', 'assets/json/chunks.json', null, Phaser.Tilemap.TILED_JSON);
     }
     create () {
+        game.physics.startSystem(Phaser.Physics.ARCADE);
+
         this.game.world.worldWidth = 1664;
-        this.loadLevel(this.game.cache.getJSON('level:1'), this.game.world.worldWidth);
-        this.game.camera.follow(this.player);
+        this.loadLevel(this.game.world.worldWidth);
+
         game.world.setBounds(0, 0, this.game.world.worldWidth, 480);
+
     }
     loadLevel () {
         this.background = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'background');
-        this.moon = this.game.add.tileSprite(0, 0, this.game.canvas.width, this.game.canvas.width, 'moon');
+        this.moon = this.game.add.image(0, 0, 'moon');
         this.midground = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'midground');
         this.midforeground = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'midforeground');
 
         this.spawnPlayer();
-
+        game.camera.bounds.setTo(0,0,2080, 480);
+        game.camera.follow(this.player);
         this.grass = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'grass');
 
         this.routeManager = new RouteManager(this.game, this.player);
@@ -81,12 +113,20 @@ class GameState {
         this.grass.tilePosition.x -= 2;
         this.midground.tilePosition.x -= 1;
         this.background.tilePosition.x -= 0.5;
-        this.moon.tilePosition.x -= 0;
+
+        this.game.world.wrap(this.player, -(this.game.width/2), false, true, false);
+
     }
     spawnPlayer () {
         this.player = new Player(this.game, 0, 0);
         this.game.add.existing(this.player);
+        game.physics.arcade.enable(this.player);
 
+    }
+    render() {
+        game.debug.cameraInfo(game.camera, 32, 32);
+
+        game.debug.spriteCoords(this.player, 32, 500);
     }
 
 }
