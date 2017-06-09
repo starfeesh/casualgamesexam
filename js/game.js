@@ -74,41 +74,89 @@ class RouteManager extends Phaser.Group {
         this.spawnedChunks = [];
         this.tileSize = 32;
 
-        this.chunkHandled = false;
+        this.playerCurrentChunk = 0;
+        this.playerNextChunk = 1;
+
+        this.loops = 0;
+        this.wasLastLoopEnd = false;
 
     }
     update() {
         var width = this.game.cache.getJSON('data').layers[0].data[0][0].length;
         var chunksTotal = game.world.worldWidth / (width * this.tileSize);
         var playerPosInWorld = this.player.x / game.world.worldWidth * chunksTotal;
-        var playerCurrentChunk = Math.floor(playerPosInWorld);
-        var currentPosInChunk = playerPosInWorld - playerCurrentChunk;
-        var chunkToSpawn;
-        var chunkToDespawn;
 
-        if (currentPosInChunk > 0.5) {
-            if (!this.chunkHandled)
-            {
-                if (playerCurrentChunk == chunksTotal - 1) { // TODO fix this, based on world width workaround.
-                    chunkToDespawn = playerCurrentChunk - 1;
-                    chunkToSpawn = 0;
-                } else {
-                    if (playerCurrentChunk == 0) {
-                        chunkToDespawn = chunksTotal - 1; // TODO fix this, based on workaround.
-                        chunkToSpawn = playerCurrentChunk + 1;
-                    } else {
-                        chunkToDespawn = playerCurrentChunk - 1;
-                        chunkToSpawn = playerCurrentChunk + 1;
-                    }
-                }
-                this.spawnChunk(chunkToSpawn);
-                this.despawnChunk(chunkToDespawn);
-                this.chunkHandled = true;
-            }
-        } else {
-            this.chunkHandled = false;
+
+        if(this.spawnedChunks.length == 0)
+        {
+            this.spawnChunk(0);
+
+            this.updateChunkIndex();
+            return;
         }
 
+        var currentChunkPosX = this.getLoopedDistance(this.playerCurrentChunk * width * this.tileSize);
+        var nextChunkPosX = this.getLoopedDistance(this.playerNextChunk * width * this.tileSize);
+
+        var playerPosX = this.getLoopedDistance(this.player.x);
+
+        //if(currentChunkPosX < nextChunkPosX)
+        //{
+        //
+        //}
+        //else if(currentChunkPosX > nextChunkPosX)
+        //{
+        //    var dist = nextChunkPosX - playerPosX;
+        //
+        //    if(dist < 0.5 * width * this.tileSize)
+        //    {
+        //        this.updateChunkIndex();
+        //        // this.despawnChunk(this.playerCurrentChunk);
+        //        this.spawnChunk(this.playerCurrentChunk);
+        //    }
+        //}
+
+        var dist = nextChunkPosX - playerPosX;
+
+        if(dist < 0.5 * width * this.tileSize){
+            this.updateChunkIndex();
+            // this.despawnChunk(this.playerCurrentChunk);
+            this.spawnChunk(this.playerCurrentChunk);
+        }
+
+     /*   if(this.playerCurrentChunk == 0)
+        {
+            distanceFromLastChunk = game.world.worldWidth - playerPosInWorld;
+            if(distanceFromLastChunk < width*this.tileSize*0.5)
+            {
+                return;
+            }
+        }
+
+        if (distanceFromLastChunk > 0) {
+
+            this.updateChunkIndex();
+            this.despawnChunk(this.playerCurrentChunk);
+            this.spawnChunk(this.playerCurrentChunk);
+        }*/
+
+    }
+
+    updateChunkIndex() {
+        this.playerCurrentChunk++;
+
+        if(this.playerCurrentChunk > 3) {
+            this.playerCurrentChunk = 0;
+        }
+        this.playerNextChunk = this.playerCurrentChunk + 1;
+
+        if(this.playerNextChunk > 3) {
+            this.playerNextChunk = 0;
+        }
+    }
+
+    getLoopedDistance(x) {
+        return this.loops * this.game.world.worldWidth + x;
     }
 
     spawnChunk(chunkToSpawn) {
@@ -124,39 +172,50 @@ class RouteManager extends Phaser.Group {
             4: "jump"
         };
 
+        var chunkPosX = width * this.tileSize * chunkToSpawn;
         var chunkToBuild = layers[0].data[Math.floor(Math.random() * layers[0].data.length)];
-        var randomChunk = new RouteChunk(game, "chunk", width, height, 0, 0);
+        var randomChunk = new RouteChunk(game, "chunk", width, height, chunkPosX, 0);
 
-        for (var x = 0; x < width; x++) {
-            for (var y = 0; y < height; y++) {
-                var tileValue = chunkToBuild[y][x];
-                var imageName = lookup[tileValue];
-                var xPos = (width * this.tileSize * chunkToSpawn) + (x * this.tileSize);
-                var yPos = y * this.tileSize;
+        console.log("placing chunk at "+ chunkPosX);
 
-                if (imageName.length !== 0) {
-                    this.trackObject = new TrackObject(this.game, imageName, xPos, yPos, randomChunk);
-                    randomChunk.childTrackObjects.push(this.trackObject);
+        if(!randomChunk.hasSpawned)
+        {
+            randomChunk.chunkNumber = chunkToSpawn;
+
+            for (var x = 0; x < width; x++) {
+                for (var y = 0; y < height; y++) {
+                    var tileValue = chunkToBuild[y][x];
+                    var imageName = lookup[tileValue];
+                    var xPos = chunkPosX + (x * this.tileSize);
+                    var yPos = y * this.tileSize;
+
+                    if (imageName.length !== 0) {
+                        this.trackObject = new TrackObject(this.game, imageName, xPos, yPos, randomChunk);
+                        randomChunk.childTrackObjects.push(this.trackObject);
+                    }
                 }
             }
+            randomChunk.spawn();
+            console.log("adding chunk "+ randomChunk.chunkNumber);
+            this.spawnedChunks.push(randomChunk);
         }
 
-        for (var j = 0; j < randomChunk.childTrackObjects.length; j++) {
-            game.add.existing(randomChunk.childTrackObjects[j]);
-            //console.log('Spawn: adding chunk at world absolute x = ' + randomChunk.childTrackObjects[j].position.x + ', y = ' + randomChunk.childTrackObjects[j].position.y);
-        }
-
-        this.spawnedChunks.push([chunkToSpawn, randomChunk]);
-
+        this.activateChunk(randomChunk, chunkPosX);
     }
+
+    activateChunk(chunk, xPos) {
+
+        chunk.x = xPos;
+        chunk.activate();
+    }
+
     despawnChunk(chunkToDespawn) {
-        //console.log('Despawn: numchunks is ' + this.spawnedChunks.length + ', despawning from chunkpos ' + chunkToDespawn);
-        for (var i = this.spawnedChunks.length - 1; i >= 0; i--) {
-            if (typeof this.spawnedChunks[i][1] != "undefined") {
-                if (this.spawnedChunks[i][1] == chunkToDespawn) {
-                    var chunkToDestroy = this.spawnedChunks.splice(i, 1);
-                    chunkToDestroy[0][1].destroy();
-                }
+        console.log('Despawn: numchunks is ' + this.spawnedChunks.length + ', despawning from chunkpos ' + chunkToDespawn);
+        for (var i = 0; i < this.spawnedChunks.length; i++) {
+            if (this.spawnedChunks[i].chunkNumber == chunkToDespawn) {
+                this.spawnedChunks[i].deactivate();
+                console.log(chunkToDespawn);
+                break;
             }
         }
     }
@@ -170,19 +229,52 @@ class RouteChunk extends Phaser.Group {
         this.height = height;
         this.x = x;
         this.y = y;
+
+        this.chunkNumber = -1;
+        this.visible = true;
+    }
+
+    spawn(){
+        this.childTrackObjects.forEach(function(c){
+            c.spawn();
+        });
+        this.hasSpawned = true;
+    }
+
+    activate(xPos) {
+        this.childTrackObjects.forEach(function(c){
+            c.activate(xPos, 0);
+        });
+    }
+
+    deactivate() {
+        this.childTrackObjects.forEach(function(c){
+            c.deactivate();
+        });
+
+        this.chunkNumber = -1;
     }
 }
 class TrackObject extends Phaser.Sprite {
     constructor(game, name, x, y, parent) {
         super(game, x, y, name);
         this.parent = parent;
+        this.originalX = x;
+        this.originalY = y;
+        parent.addChild(this);
     }
-    activate(xPos, yPos) {
-        this.position.x = this.parent._width + xPos;
-        this.position.y = yPos
+    activate() {
+        //this.position.x = this.parent.x +  this.originalX;
+        //this.position.y = this.originalY;
+
+        this.visible = true;
     }
     spawn() {
+        this.visible = false;
+    }
 
+    deactivate() {
+        this.visible = false;
     }
 }
 // Game
@@ -292,9 +384,6 @@ class GameState {
         } else {
             this.player.isSliding = false;
         }
-    }
-    render() {
-        game.debug.cameraInfo(game.camera, 32, 32);
     }
 
 }
