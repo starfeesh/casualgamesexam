@@ -24,7 +24,7 @@ class Player extends Phaser.Sprite {
         this.body.velocity.x = speed;
     }
     jump() {
-        var jumpSpeed = 600;
+        var jumpSpeed = 700;
 
         var canJump = this.body.blocked.down;
 
@@ -71,18 +71,15 @@ class RouteManager extends Phaser.Group {
     constructor(game, player) {
         super(game);
         this.player = player;
-        var spawnDistanceAheadOfPlayer = 832;
-        var activationDistanceAheadOfPlayer = 624;
         this.spawnedChunks = [];
-        this.currentChunk = 0;
         this.tileSize = 32;
 
         this.chunkHandled = false;
 
-        this.initChunk(this.currentChunk)
     }
     update() {
-        var chunksTotal = game.world.worldWidth / (this.allChunks[0]._width * this.tileSize);
+        var width = this.game.cache.getJSON('data').layers[0].data[0][0].length;
+        var chunksTotal = game.world.worldWidth / (width * this.tileSize);
         var playerPosInWorld = this.player.x / game.world.worldWidth * chunksTotal;
         var playerCurrentChunk = Math.floor(playerPosInWorld);
         var currentPosInChunk = playerPosInWorld - playerCurrentChunk;
@@ -92,12 +89,12 @@ class RouteManager extends Phaser.Group {
         if (currentPosInChunk > 0.5) {
             if (!this.chunkHandled)
             {
-                if (playerCurrentChunk == chunksTotal - 2) { // TODO fix this, based on world width workaround.
+                if (playerCurrentChunk == chunksTotal - 1) { // TODO fix this, based on world width workaround.
                     chunkToDespawn = playerCurrentChunk - 1;
                     chunkToSpawn = 0;
                 } else {
                     if (playerCurrentChunk == 0) {
-                        chunkToDespawn = chunksTotal - 2; // TODO fix this, based on workaround.
+                        chunkToDespawn = chunksTotal - 1; // TODO fix this, based on workaround.
                         chunkToSpawn = playerCurrentChunk + 1;
                     } else {
                         chunkToDespawn = playerCurrentChunk - 1;
@@ -113,12 +110,12 @@ class RouteManager extends Phaser.Group {
         }
 
     }
-    initChunk(chunkNumber) {
+
+    spawnChunk(chunkToSpawn) {
         var chunkJson = this.game.cache.getJSON('data');
         var layers = chunkJson.layers;
         var width = layers[0].width;
         var height = layers[0].height;
-        this.lastChunkPlacementPos = 0;
 
         var lookup = {
             0: "",
@@ -127,40 +124,36 @@ class RouteManager extends Phaser.Group {
             4: "jump"
         };
 
-        this.allChunks = [];
+        var chunkToBuild = layers[0].data[Math.floor(Math.random() * layers[0].data.length)];
+        var randomChunk = new RouteChunk(game, "chunk", width, height, 0, 0);
 
-        for (var i = 0; i < layers[0].data.length; i++) {
-            var chunk = new RouteChunk(game, "chunk1", width, height);
+        for (var x = 0; x < width; x++) {
+            for (var y = 0; y < height; y++) {
+                var tileValue = chunkToBuild[y][x];
+                var imageName = lookup[tileValue];
+                var xPos = (width * this.tileSize * chunkToSpawn) + (x * this.tileSize);
+                var yPos = y * this.tileSize;
 
-            for (var x = 0; x < width; x++) {
-                for (var y = 0; y < height; y++) {
-                    var tileValue = layers[0].data[chunkNumber][y][x];
-                    var imageName = lookup[tileValue];
-
-                    this.trackObject = new TrackObject(this.game, imageName, x * this.tileSize, y * this.tileSize);
-                    chunk.childTrackObjects.push(this.trackObject);
+                if (imageName.length !== 0) {
+                    this.trackObject = new TrackObject(this.game, imageName, xPos, yPos, randomChunk);
+                    randomChunk.childTrackObjects.push(this.trackObject);
                 }
             }
-            this.allChunks.push(chunk);
         }
-    }
-    spawnChunk(chunkToSpawn) {
-        console.log('Spawn: numchunks is ' + this.spawnedChunks.length + ', spawning to chunkpos ' + chunkToSpawn);
-        var randomChunk = this.allChunks[Math.floor(Math.random() * this.allChunks.length)];    // Stack Overflow
-        randomChunk.x = this.allChunks[0]._width * this.tileSize * chunkToSpawn;
 
-        for (var i = 0; i < randomChunk.childTrackObjects.length; i++) {
-            game.add.existing(randomChunk.childTrackObjects[i]);
+        for (var j = 0; j < randomChunk.childTrackObjects.length; j++) {
+            game.add.existing(randomChunk.childTrackObjects[j]);
+            //console.log('Spawn: adding chunk at world absolute x = ' + randomChunk.childTrackObjects[j].position.x + ', y = ' + randomChunk.childTrackObjects[j].position.y);
         }
 
         this.spawnedChunks.push([chunkToSpawn, randomChunk]);
 
     }
     despawnChunk(chunkToDespawn) {
-        console.log('Despawn: numchunks is ' + this.spawnedChunks.length + ', despawning from chunkpos ' + chunkToDespawn);
+        //console.log('Despawn: numchunks is ' + this.spawnedChunks.length + ', despawning from chunkpos ' + chunkToDespawn);
         for (var i = this.spawnedChunks.length - 1; i >= 0; i--) {
-            if (typeof this.spawnedChunks[i][0] != "undefined") {
-                if (this.spawnedChunks[i][0] == chunkToDespawn) {
+            if (typeof this.spawnedChunks[i][1] != "undefined") {
+                if (this.spawnedChunks[i][1] == chunkToDespawn) {
                     var chunkToDestroy = this.spawnedChunks.splice(i, 1);
                     chunkToDestroy[0][1].destroy();
                 }
@@ -169,17 +162,27 @@ class RouteManager extends Phaser.Group {
     }
 }
 class RouteChunk extends Phaser.Group {
-    constructor(game, name, width, height) {
+    constructor(game, name, width, height, x ,y) {
         super(game);
         this.childTrackObjects = [];
         this.name = name;
         this.width = width;
         this.height = height;
+        this.x = x;
+        this.y = y;
     }
 }
 class TrackObject extends Phaser.Sprite {
-    constructor(game, name, x, y) {
+    constructor(game, name, x, y, parent) {
         super(game, x, y, name);
+        this.parent = parent;
+    }
+    activate(xPos, yPos) {
+        this.position.x = this.parent._width + xPos;
+        this.position.y = yPos
+    }
+    spawn() {
+
     }
 }
 // Game
@@ -210,7 +213,7 @@ class GameState {
     create () {
         game.physics.startSystem(Phaser.Physics.ARCADE);
         game.renderer.renderSession.roundPixels = true;
-        game.world.worldWidth = 3328;
+        game.world.worldWidth = 2496;
         this.loadLevel();
 
         game.world.setBounds(0, 0, this.game.world.worldWidth, 480);
@@ -253,7 +256,7 @@ class GameState {
         this.background.tilePosition.x -= 0.5;
 
 
-        game.world.wrap(this.player, -(this.game.canvas.width/2), false, true, false);
+        game.world.wrap(this.player, -416, false, true, false);
 
         this.handleInput();
     }
