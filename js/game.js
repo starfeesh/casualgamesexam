@@ -1,3 +1,9 @@
+var debugmode = true;
+function debuglog(message) {
+  if (debugmode) {
+    console.log(new Date().toISOString() + ' · '  + message);
+  }
+}
 class Player extends Phaser.Sprite {
     constructor(game, x, y) {
         super(game, x, y, 'player');
@@ -14,7 +20,6 @@ class Player extends Phaser.Sprite {
         this.game.physics.enable(this);
         this.body.allowGravity = true;
         this.body.collideWorldBounds = true;
-
     }
     move() {
         this.isRunning = true;
@@ -54,7 +59,7 @@ class Player extends Phaser.Sprite {
         else if (this.body.velocity.y >= 0 && !this.body.blocked.down) {
             name = "fall";
         }
-        else if (this.body.velocity != 0 && this.body.blocked.down) {
+        else if (this.body.velocity !== 0 && this.body.blocked.down) {
             name = "run";
         }
 
@@ -75,7 +80,6 @@ class RouteManager extends Phaser.Group {
         this.tileSize = 32;
 
         this.chunkHandled = false;
-
     }
     update() {
         var width = this.game.cache.getJSON('data').layers[0].data[0][0].length;
@@ -89,12 +93,12 @@ class RouteManager extends Phaser.Group {
         if (currentPosInChunk > 0.5) {
             if (!this.chunkHandled)
             {
-                if (playerCurrentChunk == chunksTotal - 1) { // TODO fix this, based on world width workaround.
+                if (playerCurrentChunk == chunksTotal - 1) {
                     chunkToDespawn = playerCurrentChunk - 1;
                     chunkToSpawn = 0;
                 } else {
-                    if (playerCurrentChunk == 0) {
-                        chunkToDespawn = chunksTotal - 1; // TODO fix this, based on workaround.
+                    if (playerCurrentChunk === 0) {
+                        chunkToDespawn = chunksTotal - 1;
                         chunkToSpawn = playerCurrentChunk + 1;
                     } else {
                         chunkToDespawn = playerCurrentChunk - 1;
@@ -112,6 +116,8 @@ class RouteManager extends Phaser.Group {
     }
 
     spawnChunk(chunkToSpawn) {
+        debuglog('Spawn: numchunks is ' + this.spawnedChunks.length + ', spawning to chunkpos ' + chunkToSpawn);
+
         var chunkJson = this.game.cache.getJSON('data');
         var layers = chunkJson.layers;
         var width = layers[0].width;
@@ -120,6 +126,7 @@ class RouteManager extends Phaser.Group {
         var lookup = {
             0: "",
             1: "slide",
+            2: "",
             3: "pickup",
             4: "jump"
         };
@@ -134,27 +141,43 @@ class RouteManager extends Phaser.Group {
                 var xPos = (width * this.tileSize * chunkToSpawn) + (x * this.tileSize);
                 var yPos = y * this.tileSize;
 
-                if (imageName.length !== 0) {
-                    this.trackObject = new TrackObject(this.game, imageName, xPos, yPos, randomChunk);
-                    randomChunk.childTrackObjects.push(this.trackObject);
+                switch (imageName) {
+                    case "":
+                        break;
+                    case "slide":
+                        this.trackObject = new TrackObject(this.game, imageName, xPos, yPos, randomChunk, this.player);
+                        randomChunk.childTrackObjects.push(this.trackObject);
+                        break;
+                    case "pickup":
+                        this.pickup = new Pickup(this.game, imageName, xPos, yPos, randomChunk, this.player);
+                        randomChunk.childTrackObjects.push(this.pickup);
+                        break;
+                    case "jump":
+                        this.trackObject = new TrackObject(this.game, imageName, xPos, yPos, randomChunk, this.player);
+                        randomChunk.childTrackObjects.push(this.trackObject);
                 }
             }
         }
 
         for (var j = 0; j < randomChunk.childTrackObjects.length; j++) {
             game.add.existing(randomChunk.childTrackObjects[j]);
-            //console.log('Spawn: adding chunk at world absolute x = ' + randomChunk.childTrackObjects[j].position.x + ', y = ' + randomChunk.childTrackObjects[j].position.y);
         }
 
         this.spawnedChunks.push([chunkToSpawn, randomChunk]);
-
     }
     despawnChunk(chunkToDespawn) {
-        //console.log('Despawn: numchunks is ' + this.spawnedChunks.length + ', despawning from chunkpos ' + chunkToDespawn);
+        debuglog('Despawn: numchunks is ' + this.spawnedChunks.length + ', despawning from chunkpos ' + chunkToDespawn);
         for (var i = this.spawnedChunks.length - 1; i >= 0; i--) {
             if (typeof this.spawnedChunks[i][1] != "undefined") {
-                if (this.spawnedChunks[i][1] == chunkToDespawn) {
+                if (this.spawnedChunks[i][0] == chunkToDespawn) {
                     var chunkToDestroy = this.spawnedChunks.splice(i, 1);
+
+                    for (var j = chunkToDestroy[0][1].childTrackObjects.length - 1; j >= 0; j--) {
+                      var trackToDestroy = chunkToDestroy[0][1].childTrackObjects[j];
+
+                      trackToDestroy.destroy();
+                    }
+
                     chunkToDestroy[0][1].destroy();
                 }
             }
@@ -173,22 +196,36 @@ class RouteChunk extends Phaser.Group {
     }
 }
 class TrackObject extends Phaser.Sprite {
-    constructor(game, name, x, y, parent) {
+    constructor(game, name, x, y, parent, player) {
         super(game, x, y, name);
         this.parent = parent;
     }
-    activate(xPos, yPos) {
-        this.position.x = this.parent._width + xPos;
-        this.position.y = yPos
+}
+class Pickup extends TrackObject {
+    constructor(game, name, x, y, parent, player) {
+        super(game, name, x, y, parent, player);
+        this.game = game;
+        this.parent = parent;
+        this.player = player;
+        this.x = x;
+        this.y = y;
+
+
+        this.game.physics.enable(this);
+        this.body.immovable = true;
+        this.body.allowGravity = false;
+        this.body.collideWorldBounds = true;
+        this.body.setSize(32,32);
+
     }
-    spawn() {
+
+    update() {
 
     }
 }
-// Game
 class GameState {
     preload () {
-        game.load.atlasJSONHash('player', 'assets/img/player.png', 'assets/json/player.json'); // Load image with atlasJSONHash (from TexturePacker)
+        game.load.atlasJSONHash('player', 'assets/img/player.png', 'assets/json/player.json');
         game.load.image('background', 'assets/img/level01/back.png');
         game.load.image('midground', 'assets/img/level01/mid.png');
         game.load.image('midforeground', 'assets/img/level01/midfore.png');
@@ -208,16 +245,15 @@ class GameState {
     }
     init () {
 
-
     }
     create () {
         game.physics.startSystem(Phaser.Physics.ARCADE);
         game.renderer.renderSession.roundPixels = true;
-        game.world.worldWidth = 2496;
+        game.world.worldWidth = 851968;
         this.loadLevel();
 
         game.world.setBounds(0, 0, this.game.world.worldWidth, 480);
-        //game.stage.disableVisibilityChange = true;
+        game.stage.disableVisibilityChange = true;
 
         this.up = game.input.keyboard.addKey(Phaser.Keyboard.UP);
         this.down = game.input.keyboard.addKey(Phaser.Keyboard.DOWN);
@@ -228,9 +264,10 @@ class GameState {
             crickets: this.game.add.audio('crickets'),
             sliding: this.game.add.audio('sliding')
         };
-        //this.soundEffects.running.loopFull(1);
+
+//      this.soundEffects.running.loopFull(1);
         this.soundEffects.running.volume = 8;
-        //this.soundEffects.crickets.loopFull(1);
+//      this.soundEffects.crickets.loopFull(1);
         this.soundEffects.crickets.volume = 5;
     }
     loadLevel () {
@@ -255,8 +292,7 @@ class GameState {
         this.midground.tilePosition.x -= 1;
         this.background.tilePosition.x -= 0.5;
 
-
-        game.world.wrap(this.player, -416, false, true, false);
+        this.game.physics.arcade.overlap( this.player, this.pickup, this.handleCollisions, null, this);
 
         this.handleInput();
     }
@@ -276,16 +312,12 @@ class GameState {
         this.up.onDown.add(function () {
             let jumped = this.player.jump();
             if (jumped && !this.player.isJumping) {
-                console.log("Jumped");
                 this.player.isJumping = true;
-
             }
         }, this);
         if (this.down.isDown) {
             let slid = this.player.slide();
             if (slid && !this.player.isSliding) {
-                console.log(this.soundEffects);
-
                 this.soundEffects.running.stop();
                 this.player.isSliding = true;
             }
@@ -293,8 +325,8 @@ class GameState {
             this.player.isSliding = false;
         }
     }
-    render() {
-        game.debug.cameraInfo(game.camera, 32, 32);
+    handleCollisions() {
+        console.log("Pickup hit")
     }
 
 }
