@@ -16,25 +16,31 @@ class Player extends Phaser.Sprite {
         this.animations.add('slide', Phaser.Animation.generateFrameNames('slide_', 0, 0, '', 3), 8, true);
         this.animations.play('run');
 
-        this.y = game.canvas.height;
         this.game.physics.enable(this);
+        this.y = game.canvas.height;
         this.body.allowGravity = true;
+        this.body.setSize(60, 170, 115, 100);
         this.body.collideWorldBounds = true;
     }
     move() {
         this.isRunning = true;
         if (this.isFrozen) { return; }
 
+        if (!this.isSliding) {
+            this.body.setSize(60, 170, 115, 100);
+        }
         var speed = 200;
         this.body.velocity.x = speed;
+
     }
     jump() {
-        var jumpSpeed = 700;
+        var jumpSpeed = 630;
 
         var canJump = this.body.blocked.down;
 
         if (canJump && !this.isSliding) {
             this.isJumping = true;
+            this.body.setSize(60, 170, 115, 100);
             this.body.velocity.y = -jumpSpeed;
         }
         return canJump;
@@ -44,8 +50,12 @@ class Player extends Phaser.Sprite {
 
         if (canSlide && !this.isJumping) {
             this.isSliding = true;
+            this.body.setSize(133, 116, 75, 145)
         }
         return canSlide;
+    }
+    die() {
+        console.log("You died!")
     }
     getAnimName() {
         let name = "idle";
@@ -70,6 +80,7 @@ class Player extends Phaser.Sprite {
         if (this.animations.name !== animName) {
             this.animations.play(animName);
         }
+
     }
 }
 class RouteManager extends Phaser.Group {
@@ -78,31 +89,31 @@ class RouteManager extends Phaser.Group {
         this.player = player;
         this.spawnedChunks = [];
         this.tileSize = 32;
-
+        this.objectGroup = game.add.physicsGroup();
         this.chunkHandled = false;
     }
     update() {
         var width = this.game.cache.getJSON('data').layers[0].data[0][0].length;
         var chunksTotal = game.world.worldWidth / (width * this.tileSize);
         var playerPosInWorld = this.player.x / game.world.worldWidth * chunksTotal;
-        var playerCurrentChunk = Math.floor(playerPosInWorld);
-        var currentPosInChunk = playerPosInWorld - playerCurrentChunk;
+        this.playerCurrentChunk = Math.floor(playerPosInWorld);
+        var currentPosInChunk = playerPosInWorld - this.playerCurrentChunk;
         var chunkToSpawn;
         var chunkToDespawn;
 
         if (currentPosInChunk > 0.5) {
             if (!this.chunkHandled)
             {
-                if (playerCurrentChunk == chunksTotal - 1) {
+                if (this.playerCurrentChunk == chunksTotal - 1) {
                     chunkToDespawn = playerCurrentChunk - 1;
                     chunkToSpawn = 0;
                 } else {
-                    if (playerCurrentChunk === 0) {
+                    if (this.playerCurrentChunk === 0) {
                         chunkToDespawn = chunksTotal - 1;
-                        chunkToSpawn = playerCurrentChunk + 1;
+                        chunkToSpawn = this.playerCurrentChunk + 1;
                     } else {
-                        chunkToDespawn = playerCurrentChunk - 1;
-                        chunkToSpawn = playerCurrentChunk + 1;
+                        chunkToDespawn = this.playerCurrentChunk - 1;
+                        chunkToSpawn = this.playerCurrentChunk + 1;
                     }
                 }
                 this.spawnChunk(chunkToSpawn);
@@ -134,6 +145,7 @@ class RouteManager extends Phaser.Group {
         var chunkToBuild = layers[0].data[Math.floor(Math.random() * layers[0].data.length)];
         var randomChunk = new RouteChunk(game, "chunk", width, height, 0, 0);
 
+
         for (var x = 0; x < width; x++) {
             for (var y = 0; y < height; y++) {
                 var tileValue = chunkToBuild[y][x];
@@ -145,25 +157,27 @@ class RouteManager extends Phaser.Group {
                     case "":
                         break;
                     case "slide":
-                        this.trackObject = new TrackObject(this.game, imageName, xPos, yPos, randomChunk, this.player);
-                        randomChunk.childTrackObjects.push(this.trackObject);
+                        this.obstacle = new Obstacle(this.game, imageName, xPos, yPos, randomChunk, this.player);
+                        randomChunk.childTrackObjects.push(this.obstacle);
                         break;
                     case "pickup":
                         this.pickup = new Pickup(this.game, imageName, xPos, yPos, randomChunk, this.player);
                         randomChunk.childTrackObjects.push(this.pickup);
                         break;
                     case "jump":
-                        this.trackObject = new TrackObject(this.game, imageName, xPos, yPos, randomChunk, this.player);
-                        randomChunk.childTrackObjects.push(this.trackObject);
+                        this.obstacle = new Obstacle(this.game, imageName, xPos, yPos, randomChunk, this.player);
+                        randomChunk.childTrackObjects.push(this.obstacle);
                 }
             }
         }
 
         for (var j = 0; j < randomChunk.childTrackObjects.length; j++) {
             game.add.existing(randomChunk.childTrackObjects[j]);
+            this.objectGroup.add(randomChunk.childTrackObjects[j]);
         }
 
         this.spawnedChunks.push([chunkToSpawn, randomChunk]);
+
     }
     despawnChunk(chunkToDespawn) {
         debuglog('Despawn: numchunks is ' + this.spawnedChunks.length + ', despawning from chunkpos ' + chunkToDespawn);
@@ -199,28 +213,59 @@ class TrackObject extends Phaser.Sprite {
     constructor(game, name, x, y, parent, player) {
         super(game, x, y, name);
         this.parent = parent;
+        this.game = game;
     }
 }
 class Pickup extends TrackObject {
     constructor(game, name, x, y, parent, player) {
         super(game, name, x, y, parent, player);
         this.game = game;
-        this.parent = parent;
-        this.player = player;
-        this.x = x;
-        this.y = y;
-
+        this.pickedUp = false;
 
         this.game.physics.enable(this);
         this.body.immovable = true;
         this.body.allowGravity = false;
         this.body.collideWorldBounds = true;
         this.body.setSize(32,32);
-
+    }
+    pickUp() { // TODO something here
+        this.destroy();
+    }
+}
+class Obstacle extends TrackObject {
+    constructor(game, name, x, y, parent, player) {
+        super (game, name, x, y, parent, player);
+        this.game.physics.enable(this);
+        this.body.immovable = true;
+        this.body.allowGravity = false;
+        this.body.collideWorldBounds = true;
+        this.body.setSize(32,32);
     }
 
-    update() {
+}
+class CollisionManager extends Phaser.Group{
+    constructor(game, player, routeManager) {
+        super(game);
+        this.game = game;
+        this.player = player;
+        this.routeManager = routeManager;
 
+    }
+    getCollisions() {
+        this.game.physics.arcade.overlap(this.player, this.routeManager.objectGroup, this.handleCollisions, null, this);
+
+        this.game.physics.arcade.collide(this.player, this.routeManager.objectGroup, this.handleCollisions, null, this);
+    }
+    update() {
+        this.getCollisions();
+    }
+    handleCollisions(player, collidedObject) {
+        if (collidedObject.key == "pickup"){
+            collidedObject.pickUp();
+        }
+        if (collidedObject.key !== "pickup") {
+            player.die();
+        }
     }
 }
 class GameState {
@@ -282,6 +327,7 @@ class GameState {
         this.spawnFloor();
 
         this.routeManager = new RouteManager(this.game, this.player);
+        this.collisionManager = new CollisionManager(this.game, this.player, this.routeManager);
         this.game.physics.arcade.gravity.y = 1200;
 
     }
@@ -291,8 +337,6 @@ class GameState {
         this.grass.tilePosition.x -= 2;
         this.midground.tilePosition.x -= 1;
         this.background.tilePosition.x -= 0.5;
-
-        this.game.physics.arcade.overlap( this.player, this.pickup, this.handleCollisions, null, this);
 
         this.handleInput();
     }
@@ -313,6 +357,7 @@ class GameState {
             let jumped = this.player.jump();
             if (jumped && !this.player.isJumping) {
                 this.player.isJumping = true;
+                this.player.isSliding = false;
             }
         }, this);
         if (this.down.isDown) {
@@ -320,16 +365,39 @@ class GameState {
             if (slid && !this.player.isSliding) {
                 this.soundEffects.running.stop();
                 this.player.isSliding = true;
+                this.player.isJumping = false;
             }
-        } else {
+        }else {
             this.player.isSliding = false;
         }
     }
-    handleCollisions() {
-        console.log("Pickup hit")
-    }
-
 }
+/*
+class TrackObjectFactory {
+    constructor() {
+        this.instances = [];
+    }
+    create(game, name, x, y, parent, player) {
+        var newTrackObject;
+
+        if (name.length > 0) {
+            switch (name) {
+                case "slide":
+                    newTrackObject = new TrackObject(game, name, x, y, parent, player);
+                    break;
+                case "jump":
+                    newTrackObject = new TrackObject(game, name, x, y, parent, player);
+                    break;
+                case "pickup":
+                    newTrackObject = new Pickup(game, name, x, y, parent, player);
+                    break;
+            }
+            this.instances.push(newTrackObject);
+            return newTrackObject;
+        }
+    }
+}
+var trackObjectFactory = new TrackObjectFactory();*/
 var game = new Phaser.Game(832, 480, Phaser.AUTO, 'game');
 window.onload = function () {
     game.state.add('GameState', GameState);
