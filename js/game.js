@@ -1,9 +1,3 @@
-var debugmode = true;
-function debuglog(message) {
-  if (debugmode) {
-    console.log(new Date().toISOString() + ' · '  + message);
-  }
-}
 class Player extends Phaser.Sprite {
     constructor(game, x, y) {
         super(game, x, y, 'player');
@@ -25,10 +19,11 @@ class Player extends Phaser.Sprite {
         this.pickupCount = 0;
         this.distance = 0;
         this.isAlive = true;
+        this.stopped = false;
     }
     move() {
-        this.isRunning = true;
         if (this.isFrozen) { return; }
+        this.isRunning = true;
 
         if (!this.isSliding) {
             this.body.setSize(60, 170, 115, 100);
@@ -53,13 +48,14 @@ class Player extends Phaser.Sprite {
 
         if (canSlide && !this.isJumping) {
             this.isSliding = true;
-            this.body.setSize(133, 116, 75, 145)
+            this.body.setSize(60, 116, 75, 145)
         }
         return canSlide;
     }
     freeze() {
-        //this.body.enable = false;
         this.isFrozen = true;
+        //this.body.enable = false;
+        this.body.velocity.x = 0;
     }
     die() {
         this.isAlive = false;
@@ -70,6 +66,9 @@ class Player extends Phaser.Sprite {
 
         if (!this.isAlive) {
             name = "die";
+        }
+        else if (this.body.velocity.x === 0 && this.isAlive && this.stopped) {
+            name = "idle";
         }
         else if (this.isSliding) {
             name = "slide";
@@ -139,8 +138,6 @@ class RouteManager extends Phaser.Group {
     }
 
     spawnChunk(chunkToSpawn) {
-        debuglog('Spawn: numchunks is ' + this.spawnedChunks.length + ', spawning to chunkpos ' + chunkToSpawn);
-
         var chunkJson = this.game.cache.getJSON('data');
         var layers = chunkJson.layers;
         var width = layers[0].width;
@@ -210,7 +207,6 @@ class RouteManager extends Phaser.Group {
 
     }
     despawnChunk(chunkToDespawn) {
-        debuglog('Despawn: numchunks is ' + this.spawnedChunks.length + ', despawning from chunkpos ' + chunkToDespawn);
         for (var i = this.spawnedChunks.length - 1; i >= 0; i--) {
             if (typeof this.spawnedChunks[i][1] != "undefined") {
                 if (this.spawnedChunks[i][0] == chunkToDespawn) {
@@ -300,28 +296,26 @@ class CollisionManager extends Phaser.Group{
     }
 }
 class Level {
-    constructor(game, level, player) {
+    constructor(game, level, player, currentState) {
         this.game = game;
         this.levelNumber = level;
         this.player = player;
+        this.state = currentState;
     }
     getLevelSounds() {
         this.soundEffects = {
             running: this.game.add.audio('running'),
-            crickets: this.game.add.audio('crickets'),
-            sliding: this.game.add.audio('sliding')
+            sliding: this.game.add.audio('sliding'),
+            oomph: this.game.add.audio('oomph')
         };
-        this.soundEffects.crickets.volume = 5;
-        this.soundEffects.running.volume = 8;
 
         switch (this.levelNumber) {
             case 1:
                 this.soundEffects.running.loopFull(5);
-                this.soundEffects.crickets.loopFull(8);
+
                 break;
             case 2:
-                this.soundEffects.running.loopFull(1);
-                this.soundEffects.running.volume = 5;
+                this.soundEffects.running.loopFull(5);
                 break;
         }
     }
@@ -338,76 +332,62 @@ class Level {
     getLevelDeco() { // TODO: Figure out how to return the values rather than setting them
         switch (this.levelNumber) {
             case 1:
-                this.background = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'lvl1bg');
-                this.midground = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'lvl1mg');
-                this.midforeground = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'lvl1mfg');
-                break;
-            case 2:
                 this.background = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'lvl2bg');
                 this.midground = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'lvl2mg');
                 this.midforeground = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'lvl2mfg');
+                break;
+            case 2:
+                this.background = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'lvl1bg');
+                this.midground = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'lvl1mg');
+                this.midforeground = this.game.add.tileSprite(0, 0, this.game.world.worldWidth, this.game.canvas.width, 'lvl1mfg');
                 break;
         }
     }
     getLevelBackgroundColor() {
         switch (this.levelNumber) { // Attempted to draw gradient on rect but solid bitmap seems more efficient?
             case 1:
-                this.color = this.game.add.image(0,0, 'moon1');
+                this.color = this.game.add.image(0,0, 'moon2');
                 break;
             case 2:
-                this.color = this.game.add.image(0,0,'moon2');
+                this.color = this.game.add.image(0,0,'moon1');
                 break;
         }
     }
     getLevelLength() {
         switch (this.levelNumber) {
             case 1:
-                this.distance = 5000;
+                this.distance = 2500;
                 break;
             case 2:
-                this.distance = 10000;
+                this.distance = 5000;
                 break;
         }
         return this.distance;
     }
+    getLevelComplete() {
+        switch (this.levelNumber) {
+            case 1:
+                var nextLevel = this.levelNumber + 1;
+                this.txt = this.game.add.text(this.game.canvas.width / 2, this.game.canvas.height / 2 - 80, "Level " + nextLevel, {font: "70px YozakuraLight", fill: "#ffffff", align: "center"});
+                this.txt.fixedToCamera = true;
+                this.txt.anchor.set(0.5);
+                this.game.add.tween(this.txt)
+                    .to({alpha: 1}, 1500, null, true, 1500)
+                    .onComplete.addOnce(function () {
+                    this.state.nextLevel();
+                }, this);
+                break;
+            case 2:
+                console.log("You win!")
+                break;
+        }
+    }
 }
 class GameState {
     preload () {
-        game.load.atlasJSONHash('player', 'assets/img/player.png', 'assets/json/player.json');
-        game.load.image('lvl1bg', 'assets/img/level01/back.png');
-        game.load.image('lvl1mg', 'assets/img/level01/mid.png');
-        game.load.image('lvl1mfg', 'assets/img/level01/midfore.png');
-        game.load.image('lvl2bg', 'assets/img/level02/bg.png');
-        game.load.image('lvl2mg', 'assets/img/level02/mg.png');
-        game.load.image('lvl2mfg', 'assets/img/level02/mfg.png');
-        game.load.image('grass', 'assets/img/level01/grass.png');
-        game.load.image('moon1', 'assets/img/level01/moon.png');
-        game.load.image('moon2', 'assets/img/level02/moon.png');
-
-        game.load.image('slide1', 'assets/img/slide1.png');
-        game.load.image('slide2', 'assets/img/slide2.png');
-        game.load.image('slide3', 'assets/img/slide3.png');
-        game.load.image('slide4', 'assets/img/slide4.png');
-        game.load.image('slide5', 'assets/img/slide5.png');
-        game.load.image('slide6', 'assets/img/slide6.png');
-        game.load.image('slide7', 'assets/img/slide7.png');
-        game.load.image('slide8', 'assets/img/slide8.png');
-        game.load.image('jumpbottom', 'assets/img/jumpbottom.png');
-        game.load.image('jumptop', 'assets/img/jumptop.png');
-        game.load.image('jumpmid', 'assets/img/jumpmid.png');
-        game.load.image('pickup', 'assets/img/pickup.png');
-
-        game.load.audio('running', 'assets/audio/mix.mp3');
-        game.load.audio('crickets', 'assets/audio/crickets.mp3');
-        game.load.audio('sliding', 'assets/audio/slide.mp3');
-
-        game.load.json('data', 'assets/json/chunks.json');
-        game.load.image('level', 'assets/img/tiles.png');
-
-        game.load.image('font', 'assets/img/hudtext.png');
     }
     init () {
-        this.levelNumber = 1;
+        this.levelNumber = 0;
         this.deathHappened = false;
     }
     create () {
@@ -423,12 +403,12 @@ class GameState {
         this.mute = game.input.keyboard.addKey(Phaser.Keyboard.M);
 
         this.loadLevel();
-        this.createHUD();
-
     }
     loadLevel () {
         this.levelNumber++;
-        this.level = new Level(this.game, this.levelNumber, this.player);
+        this.levelComplete = false;
+
+        this.level = new Level(this.game, this.levelNumber, this.player, this);
         this.levelDistance = this.level.getLevelLength();
         this.level.getLevelBackgroundColor();
         this.level.color.fixedToCamera = true;
@@ -443,9 +423,10 @@ class GameState {
 
         this.game.physics.arcade.gravity.y = 1200;
         this.level.getLevelSounds(this.levelNumber);
+        this.createHUD();
     }
     update () {
-        if (this.player.isAlive) {
+        if (this.player.isAlive && !this.player.stopped) {
             this.player.move();
             this.level.midforeground.tilePosition.x -= 2;
             this.grass.tilePosition.x -= 2;
@@ -463,12 +444,15 @@ class GameState {
             this.onDeath();
             this.deathHappened = true;
         }
+        if (this.player.distance <= 0 && this.player.isAlive && this.levelNumber == 1 && !this.levelComplete && !this.player.stopped) {
+            this.handleSuccess();
+        }
 
     }
     createHUD() { // Used Phaser guide on bitmap text
         var numbers_str =   '0123456789XM';
-        this.pickupFont = this.game.add.retroFont('font', 20, 26, numbers_str, 6);
-        this.distanceFont = this.game.add.retroFont('font', 20, 26, numbers_str, 6);
+        this.pickupFont = this.game.add.retroFont('font', 21, 34, numbers_str, 6);
+        this.distanceFont = this.game.add.retroFont('font', 21, 34, numbers_str, 6);
 
         var pickupIcon = this.game.make.image(0, 4, 'pickup');
         var pickupScore = this.game.make.image(pickupIcon.x + pickupIcon.width, 8, this.pickupFont);
@@ -494,6 +478,7 @@ class GameState {
         this.player = new Player(this.game, 416, 0);
         this.game.add.existing(this.player);
         game.physics.arcade.enable(this.player);
+        this.player.stopped = false;
 
     }
     spawnFloor () {
@@ -523,13 +508,39 @@ class GameState {
     }
     onDeath() {
         this.level.soundEffects.running.stop();
+        this.level.soundEffects.oomph.play();
+        this.game.add.tween(this.player)
+            .to({x: '-50'}, 500, null, true)
+            .onComplete.addOnce(this.fadeOut, this);
+    }
+    fadeOut() {
+        game.camera.fade("#000000", 1500);
+        game.camera.onFadeComplete.addOnce(this.gameOver, this);
+    }
+    handleSuccess() {
+        this.levelComplete = true;
+        this.player.freeze();
+        this.player.stopped = true;
+        this.level.soundEffects.running.pause();
+
+        this.black = this.game.add.image(0,0,'fakefade');
+        this.black.fixedToCamera = true;
+        this.black.width = game.canvas.width;
+        this.black.height = game.canvas.height;
+        this.black.alpha = 0;
+
+        this.game.add.tween(this.black)
+            .to({alpha:1}, 1500, null, true, 500).start()
+            .onComplete.addOnce(function () {
+            this.level.getLevelComplete(this.levelNumber);
+        },this);
+    }
+    nextLevel() {
+        this.level.txt.destroy();
+        this.black.destroy();
+        this.loadLevel();
     }
     gameOver() {
-
+        game.state.start("GameOver")
     }
 }
-var game = new Phaser.Game(832, 480, Phaser.AUTO, 'game');
-window.onload = function () {
-    game.state.add('GameState', GameState);
-    game.state.start('GameState');
-};
