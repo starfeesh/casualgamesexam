@@ -10,11 +10,13 @@ class Load{
         game.state.add("Menu", Menu);
         game.state.add("GameState", GameState);
         game.state.add("GameOver", GameOver);
+        game.state.add("Win", Win);
     }
     loadScripts () {
         game.load.script('game', 'js/game.js');
         game.load.script('gameover', 'js/gameover.js');
         game.load.script('mainmenu', 'js/menu.js');
+        game.load.script('winscreen', 'js/win.js');
     }
     preload () {
         this.loadScripts();
@@ -35,6 +37,7 @@ class Load{
         game.load.image('grass', 'assets/img/level01/grass.png');
         game.load.image('moon1', 'assets/img/level01/moon.png');
         game.load.image('moon2', 'assets/img/level02/moon.png');
+        game.load.image('winbg', 'assets/img/win.png');
 
         game.load.image('slide1', 'assets/img/slide1.png');
         game.load.image('slide2', 'assets/img/slide2.png');
@@ -50,6 +53,7 @@ class Load{
         game.load.image('pickup', 'assets/img/pickup.png');
 
         game.load.audio('running', 'assets/audio/mix.mp3'); // Freesound.org
+        game.load.audio('gem', 'assets/audio/gem-ping.wav'); // Freesound.org
         game.load.audio('sliding', 'assets/audio/slide.mp3'); // Youtube audio library
         game.load.audio('oomph', 'assets/audio/foomph08.wav'); // Ultima Online sound
         game.load.audio('bgmusic', 'assets/audio/bgmusic.mp3'); // Youtube Zen Music

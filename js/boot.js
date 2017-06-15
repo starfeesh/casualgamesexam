@@ -1,3 +1,8 @@
+// Hi Jonas or Peter (or other teacher), my code is all wound
+// up in Phaser states, but the majority of the game is in:
+// http://kea.starfeesh.com/casualgames/twilightescape/js/game.js
+
+
 class Boot {
     preload() {
         this.load.image('preloader', 'assets/img/preloader.png');

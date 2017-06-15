@@ -33,3 +33,6 @@ p {
     bottom: 0;
     margin: auto 5%;
 }
+#preloader {
+    opacity: 0;
+}
